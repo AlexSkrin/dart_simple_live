@@ -1,4 +1,4 @@
-name: Build Simple Live APK
+name: Build Simple Live Release APK
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -30,21 +30,34 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Create dummy key.properties
+      # ✅ 生成真实 Release 签名文件
+      - name: Generate release keystore
         run: |
-          mkdir -p android
+          keytool -genkey -v \
+            -keystore android/app/release.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias release \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Android,O=Android,C=US"
+
+      # ✅ 创建 key.properties
+      - name: Create key.properties
+        run: |
           cat > android/key.properties <<EOF
-          storePassword=dummy
-          keyPassword=dummy
-          keyAlias=dummy
-          storeFile=dummy.jks
+          storePassword=123456
+          keyPassword=123456
+          keyAlias=release
+          storeFile=app/release.jks
           EOF
 
-      - name: Build Debug APK
-        run: flutter build apk --debug --target-platform android-arm64
+      # ✅ 构建 Release 并按 ABI 分包
+      - name: Build Release APK (split per abi)
+        run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK
+      # ✅ 上传所有 ABI APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: simple-live-apk
-          path: simple_live_app/build/app/outputs/flutter-apk/app-debug.apk
+          name: simple-live-release-apk
+          path: simple_live_app/build/app/outputs/flutter-apk/*.apk
